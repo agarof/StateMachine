@@ -14,9 +14,16 @@ concept State = requires(T state) {
 
 template <typename T>
 concept Transitioner =
-    requires(T transitioner, typename T::Transition& transition, typename T::States& states) {
-      { transitioner(states, transition) };
+    requires(T transitioner, typename T::Transition& transition, typename T::State& state) {
+      { transitioner(state, transition) };
     };
+
+template <typename Transition, State<Transition>... SubStates>
+struct VariantState : public std::variant<SubStates...> {
+  auto update() -> std::optional<Transition> {
+    return std::visit([](auto& state) { return state.update(); }, *this);
+  }
+};
 
 template <Transitioner T>
 class StateMachine : T {
@@ -24,7 +31,7 @@ class StateMachine : T {
   StateMachine(T transitioner) : T{std::move(transitioner)} {}
 
   void update() {
-    auto transition = std::visit([](auto& state) { return state.update(); }, this->data);
+    auto transition = this->data.update();
 
     if (transition.has_value()) {
       this->T::operator()(this->data, *transition);
@@ -32,5 +39,5 @@ class StateMachine : T {
   }
 
  private:
-  typename T::States data;
+  typename T::State data;
 };
